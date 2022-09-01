@@ -20,7 +20,7 @@ class Todos
     private ?string $content = null;
 
     #[ORM\Column(nullable: true)]
-    private array $attachment = [];
+    private ?string $attachment = "";
 
     #[ORM\Column]
     private ?\DateTimeImmutable $updated_at = null;
@@ -57,12 +57,12 @@ class Todos
         return $this;
     }
 
-    public function getAttachment(): array
+    public function getAttachment(): string
     {
         return $this->attachment;
     }
 
-    public function setAttachment(?array $attachment): self
+    public function setAttachment(?string $attachment): self
     {
         $this->attachment = $attachment;
 

@@ -75,6 +75,7 @@ class TodosController extends AbstractController
         }
 
         return $this->json([
+            'id' => $todo->getId(),
             'title' => $todo->getTitle(),
             'content' => $todo->getContent(),
             'attachment' => $todo->getAttachment()
