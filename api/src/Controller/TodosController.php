@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\Request;
@@ -12,17 +13,15 @@ use App\Entity\Todos;
 
 class TodosController extends AbstractController
 {
-    #[Route('/todos', name: 'app_todos')]
-    public function index(ManagerRegistry $doctrine): JsonResponse
+    #[Route('/todos')]
+    public function index(ManagerRegistry $doctrine, SerializerInterface $serializer)
     {
         $todos = $doctrine->getRepository(Todos::class)->findAll();
 
-        return $this->json([
-            $todos
-        ]);
+        return new JsonResponse($serializer->serialize($todos, 'json'), 200, [], true);
     }
 
-    #[Route('/todos/create', name: 'app_todos')]
+    #[Route('/todos/create')]
     public function createTodo(ManagerRegistry $doctrine, ValidatorInterface $validator, Request $request): JsonResponse
     {
         $newTodo = json_decode($request->getContent());
@@ -41,8 +40,8 @@ class TodosController extends AbstractController
         $todo->setTitle($newTodo->title);
         $todo->setContent($newTodo->content);
         $todo->setAttachment($newTodo->attachment);
-        $todo->setUpdatedAt(date('now'));
-        $todo->setCreatedAt(date('now'));
+        $todo->setUpdatedAt(new \DateTimeImmutable());
+        $todo->setCreatedAt(new \DateTimeImmutable());
 
         $errors = $validator->validate($todo);
         if (count($errors) > 0)
@@ -54,10 +53,7 @@ class TodosController extends AbstractController
             ]);
         }
 
-        // tell Doctrine you want to (eventually) save the Todo (no queries yet)
         $entityManager->persist($todo);
-
-        // actually executes the queries (i.e. the INSERT query)
         $entityManager->flush();
 
         return $this->json([
@@ -67,8 +63,8 @@ class TodosController extends AbstractController
         ]);
     }
 
-    #[Route('/todos/{id}', name: 'product_show')]
-    public function show(ManagerRegistry $doctrine, int $id): Response
+    #[Route('/todos/{id}')]
+    public function show(ManagerRegistry $doctrine, int $id): JsonResponse
     {
         $todo = $doctrine->getRepository(Todos::class)->find($id);
 
@@ -78,10 +74,79 @@ class TodosController extends AbstractController
             );
         }
 
-        return new Response($todo->getTitle());
+        return $this->json([
+            'title' => $todo->getTitle(),
+            'content' => $todo->getContent(),
+            'attachment' => $todo->getAttachment()
+        ]);
+    }
 
-        // or render a template
-        // in the template, print things with {{ product.name }}
-        // return $this->render('product/show.html.twig', ['product' => $product]);
+    #[Route('/todos/update/{id}')]
+    public function update(ManagerRegistry $doctrine, ValidatorInterface $validator, Request $request, int $id): JsonResponse
+    {
+        $todoUpdated = json_decode($request->getContent());
+        if (empty($todoUpdated))
+        {
+            return $this->json([
+                'message' => 'Something went wrong...',
+                'error' => 'Invalid request body.',
+                'errorCode' => 422
+            ]);
+        }
+
+        $entityManager = $doctrine->getManager();
+        $needToUpdateTodo = $doctrine->getRepository(Todos::class)->find($id);
+
+        if (!$needToUpdateTodo) {
+            throw $this->createNotFoundException(
+                'No todo found for id '.$id
+            );
+        }
+
+        $needToUpdateTodo->setTitle($todoUpdated->title);
+        $needToUpdateTodo->setContent($todoUpdated->content);
+        $needToUpdateTodo->setAttachment($todoUpdated->attachment);
+        $needToUpdateTodo->setUpdatedAt(new \DateTimeImmutable());
+
+        $errors = $validator->validate($needToUpdateTodo);
+        if (count($errors) > 0)
+        {
+            return $this->json([
+                'message' => 'Something went wrong...',
+                'error' => (string) $errors,
+                'errorCode' => 400
+            ]);
+        }
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Updated todo with id '.$needToUpdateTodo->getId(),
+            'error' => null,
+            'errorCode' => null
+        ]);
+    }
+
+    #[Route('/todos/delete/{id}')]
+    public function delete(ManagerRegistry $doctrine, int $id): JsonResponse
+    {
+        $entityManager = $doctrine->getManager();
+        $todo = $doctrine->getRepository(Todos::class)->find($id);
+
+        if (!$todo) {
+            throw $this->createNotFoundException(
+                'No todo found for id '.$id
+            );
+        }
+
+        $id = $todo->getId();
+        $entityManager->remove($todo);
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Deleted todo with id '.$id,
+            'error' => null,
+            'errorCode' => null
+        ]);
     }
 }
